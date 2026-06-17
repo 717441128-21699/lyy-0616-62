@@ -10,8 +10,12 @@ import {
   Hand,
   Download,
   RefreshCw,
+  Copy,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
 import { useWeddingStore } from '@/store/weddingStore';
+import { Guest } from '@/types';
 import { cn, getInitials, formatDate } from '@/utils';
 
 export default function CheckIn() {
@@ -24,7 +28,11 @@ export default function CheckIn() {
   const [mode, setMode] = useState<'scan' | 'manual'>('scan');
   const [manualInput, setManualInput] = useState('');
   const [recentCheckin, setRecentCheckin] = useState<string | null>(null);
+  const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
+  const [showGuestDropdown, setShowGuestDropdown] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const confirmedGuests = guests.filter((g) => g.rsvpStatus === 'confirmed');
   const checkedInGuests = guests.filter((g) => g.checkedIn);
@@ -44,6 +52,27 @@ export default function CheckIn() {
     return true;
   });
 
+  const dropdownFiltered = confirmedGuests.filter((g) => {
+    if (!search) return true;
+    return g.name.includes(search) || g.phone.includes(search);
+  });
+
+  useEffect(() => {
+    if (!dropdownRef.current) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!dropdownRef.current?.contains(e.target as Node)) {
+        setShowGuestDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const generateCheckInLink = (guestId: string) => {
+    const baseUrl = window.location.origin;
+    return `${baseUrl}/checkin-scan/${guestId}`;
+  };
+
   useEffect(() => {
     if (!canvasRef.current || mode !== 'scan') return;
 
@@ -58,9 +87,19 @@ export default function CheckIn() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, size, size);
 
+    if (!selectedGuest) {
+      ctx.fillStyle = '#d4c4b0';
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('请选择嘉宾', size / 2, size / 2 - 10);
+      ctx.fillText('生成专属签到码', size / 2, size / 2 + 15);
+      return;
+    }
+
     const cellSize = 8;
     const cells = Math.floor(size / cellSize);
-    const seed = (project.groomName + project.brideName + project.weddingDate).length;
+    const seed = (selectedGuest.id + selectedGuest.name + selectedGuest.phone).length;
 
     for (let y = 0; y < cells; y++) {
       for (let x = 0; x < cells; x++) {
@@ -71,7 +110,7 @@ export default function CheckIn() {
 
         if (isCorner) continue;
 
-        const hash = (x * 7 + y * 13 + seed * 3) % 7;
+        const hash = (x * 7 + y * 13 + seed * 3 + selectedGuest.id.charCodeAt(0) * 5) % 7;
         if (hash < 3) {
           ctx.fillStyle = '#8B2635';
           ctx.fillRect(x * cellSize, y * cellSize, cellSize - 1, cellSize - 1);
@@ -104,19 +143,19 @@ export default function CheckIn() {
     const centerY = (size - centerSize) / 2;
     ctx.fillRect(centerX, centerY, centerSize, centerSize);
 
-    ctx.fillStyle = '#E8B4B8';
+    ctx.fillStyle = selectedGuest.relation === 'groom_side' ? '#60A5FA' : '#F472B6';
     ctx.fillRect(centerX + 4, centerY + 4, centerSize - 8, centerSize - 8);
 
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 20px serif';
+    ctx.font = 'bold 14px serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('💍', size / 2, size / 2);
+    ctx.fillText(getInitials(selectedGuest.name), size / 2, size / 2);
 
     return () => {
       ctx.clearRect(0, 0, size, size);
     };
-  }, [mode, project.groomName, project.brideName, project.weddingDate]);
+  }, [mode, selectedGuest]);
 
   const handleManualCheckIn = () => {
     if (!manualInput.trim()) return;
@@ -140,6 +179,20 @@ export default function CheckIn() {
       setRecentCheckin(name);
       setTimeout(() => setRecentCheckin(null), 3000);
     }
+  };
+
+  const handleCopyLink = () => {
+    if (!selectedGuest) return;
+    const link = generateCheckInLink(selectedGuest.id);
+    navigator.clipboard.writeText(link);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleSelectGuest = (guest: Guest) => {
+    setSelectedGuest(guest);
+    setShowGuestDropdown(false);
+    setSearch('');
   };
 
   const timelineData = () => {
@@ -236,16 +289,135 @@ export default function CheckIn() {
           </div>
 
           {mode === 'scan' ? (
-            <div className="relative">
-              <div className="p-6 rounded-3xl bg-gradient-romantic shadow-romantic">
-                <div className="p-3 rounded-2xl bg-white shadow-inner-gold">
-                  <canvas ref={canvasRef} className="block rounded-xl" />
-                </div>
+            <div className="w-full max-w-sm space-y-4">
+              <div className="relative" ref={dropdownRef}>
+                <label className="label-field flex items-center gap-2 mb-2">
+                  <UserCheck size={14} className="text-rose-500" />
+                  选择嘉宾生成专属签到码
+                </label>
+                <button
+                  onClick={() => setShowGuestDropdown(!showGuestDropdown)}
+                  className="w-full input-field flex items-center justify-between"
+                >
+                  {selectedGuest ? (
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        'w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold',
+                        selectedGuest.relation === 'groom_side'
+                          ? 'bg-gradient-to-br from-blue-400 to-blue-600'
+                          : 'bg-gradient-to-br from-pink-400 to-rose-500'
+                      )}>
+                        {getInitials(selectedGuest.name)}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-gray-800 text-sm">{selectedGuest.name}</p>
+                        <p className="text-xs text-champagne-500">
+                          {selectedGuest.relation === 'groom_side' ? '新郎方' : '新娘方'}
+                          {selectedGuest.checkedIn && ' · 已签到'}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-champagne-400">请选择一位嘉宾</span>
+                  )}
+                  <ChevronDown size={18} className="text-champagne-400" />
+                </button>
+
+                {showGuestDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-champagne-200 shadow-lg z-50 max-h-64 overflow-y-auto">
+                    <div className="p-2 border-b border-champagne-100">
+                      <input
+                        type="text"
+                        placeholder="搜索嘉宾姓名或电话..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-champagne-200 text-sm focus:outline-none focus:border-rose-300"
+                      />
+                    </div>
+                    <div className="py-1">
+                      {dropdownFiltered.length === 0 ? (
+                        <p className="px-4 py-3 text-sm text-champagne-500 text-center">没有找到匹配的嘉宾</p>
+                      ) : (
+                        dropdownFiltered.map((guest) => (
+                          <button
+                            key={guest.id}
+                            onClick={() => handleSelectGuest(guest)}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-4 py-2.5 hover:bg-champagne-50 transition-colors',
+                              selectedGuest?.id === guest.id && 'bg-rose-50'
+                            )}
+                          >
+                            <div className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0',
+                              guest.relation === 'groom_side'
+                                ? 'bg-gradient-to-br from-blue-400 to-blue-600'
+                                : 'bg-gradient-to-br from-pink-400 to-rose-500'
+                            )}>
+                              {getInitials(guest.name)}
+                            </div>
+                            <div className="flex-1 text-left min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-gray-800 text-sm truncate">{guest.name}</p>
+                                {guest.checkedIn && (
+                                  <CheckCircle2 size={12} className="text-green-500 flex-shrink-0" />
+                                )}
+                              </div>
+                              <p className="text-xs text-champagne-500 truncate">
+                                {guest.relation === 'groom_side' ? '新郎方' : '新娘方'} · {guest.phone}
+                              </p>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="absolute -top-3 -left-3 w-8 h-8 border-t-4 border-l-4 border-champagne-400 rounded-tl-xl" />
-              <div className="absolute -top-3 -right-3 w-8 h-8 border-t-4 border-r-4 border-champagne-400 rounded-tr-xl" />
-              <div className="absolute -bottom-3 -left-3 w-8 h-8 border-b-4 border-l-4 border-champagne-400 rounded-bl-xl" />
-              <div className="absolute -bottom-3 -right-3 w-8 h-8 border-b-4 border-r-4 border-champagne-400 rounded-br-xl" />
+
+              {selectedGuest && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-champagne-50">
+                  <span className="text-xs text-champagne-600">签到链接：</span>
+                  <code className="flex-1 text-xs text-champagne-700 font-mono truncate">
+                    {generateCheckInLink(selectedGuest.id)}
+                  </code>
+                  <button
+                    onClick={handleCopyLink}
+                    className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white transition-colors"
+                  >
+                    {copiedLink ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="text-champagne-500" />}
+                  </button>
+                </div>
+              )}
+
+              <div className="relative flex justify-center">
+                <div className="p-6 rounded-3xl bg-gradient-romantic shadow-romantic">
+                  <div className="p-3 rounded-2xl bg-white shadow-inner-gold">
+                    <canvas ref={canvasRef} className="block rounded-xl" />
+                  </div>
+                </div>
+                <div className="absolute -top-3 -left-3 w-8 h-8 border-t-4 border-l-4 border-champagne-400 rounded-tl-xl" />
+                <div className="absolute -top-3 -right-3 w-8 h-8 border-t-4 border-r-4 border-champagne-400 rounded-tr-xl" />
+                <div className="absolute -bottom-3 -left-3 w-8 h-8 border-b-4 border-l-4 border-champagne-400 rounded-bl-xl" />
+                <div className="absolute -bottom-3 -right-3 w-8 h-8 border-b-4 border-r-4 border-champagne-400 rounded-br-xl" />
+              </div>
+
+              {selectedGuest && (
+                <div className="text-center">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-semibold">{selectedGuest.name}</span> 的专属签到码
+                  </p>
+                  <p className="text-xs text-champagne-500 mt-1">
+                    扫码后自动完成签到，实时更新统计数据
+                  </p>
+                </div>
+              )}
+
+              {!selectedGuest && (
+                <div className="text-center text-champagne-500 text-sm">
+                  <p>👆 请先在上方选择一位嘉宾</p>
+                  <p className="mt-1">系统将为其生成专属的签到二维码</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="w-full max-w-sm">
@@ -351,7 +523,8 @@ export default function CheckIn() {
                   'flex items-center justify-between p-3 rounded-xl transition-all',
                   guest.checkedIn
                     ? 'bg-green-50/60 border border-green-100'
-                    : 'bg-champagne-50/30 hover:bg-champagne-50 border border-transparent hover:border-champagne-200'
+                    : 'bg-champagne-50/30 hover:bg-champagne-50 border border-transparent hover:border-champagne-200',
+                  selectedGuest?.id === guest.id && mode === 'scan' && 'ring-2 ring-rose-300'
                 )}
               >
                 <div className="flex items-center gap-3">
@@ -389,27 +562,43 @@ export default function CheckIn() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleQuickCheckIn(guest.id, guest.name)}
-                  className={cn(
-                    'px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2',
-                    guest.checkedIn
-                      ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      : 'bg-gradient-romantic text-white shadow-romantic hover:-translate-y-0.5'
+                <div className="flex items-center gap-2">
+                  {mode === 'scan' && guest.rsvpStatus === 'confirmed' && (
+                    <button
+                      onClick={() => handleSelectGuest(guest)}
+                      className={cn(
+                        'px-3 py-2 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5',
+                        selectedGuest?.id === guest.id
+                          ? 'bg-rose-100 text-rose-700'
+                          : 'bg-champagne-50 text-champagne-600 hover:bg-champagne-100'
+                      )}
+                    >
+                      <QrCode size={14} />
+                      签到码
+                    </button>
                   )}
-                >
-                  {guest.checkedIn ? (
-                    <>
-                      <XCircle size={15} />
-                      撤销
-                    </>
-                  ) : (
-                    <>
-                      <UserCheck size={15} />
-                      签到
-                    </>
-                  )}
-                </button>
+                  <button
+                    onClick={() => handleQuickCheckIn(guest.id, guest.name)}
+                    className={cn(
+                      'px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2',
+                      guest.checkedIn
+                        ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        : 'bg-gradient-romantic text-white shadow-romantic hover:-translate-y-0.5'
+                    )}
+                  >
+                    {guest.checkedIn ? (
+                      <>
+                        <XCircle size={15} />
+                        撤销
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck size={15} />
+                        签到
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             ))}
 

@@ -152,6 +152,10 @@ export const useWeddingStore = create<WeddingStore>((set, get) => ({
               ...g,
               rsvpStatus: status,
               confirmedAt: status === 'confirmed' ? new Date().toISOString() : undefined,
+              checkedIn: status === 'declined' ? false : g.checkedIn,
+              checkedInAt: status === 'declined' ? undefined : g.checkedInAt,
+              tableId: status === 'declined' ? undefined : g.tableId,
+              seatNumber: status === 'declined' ? undefined : g.seatNumber,
             }
           : g
       ),

@@ -115,18 +115,27 @@ ${message}
     for (const guest of guestList) {
       await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 500));
       
-      const success = Math.random() > 0.08;
+      let success = true;
       let message = '';
       
       if (channel === 'sms') {
-        message = success ? `已发送至 ${guest.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}` : '短信发送失败，请检查号码';
-      } else if (channel === 'email') {
-        if (guest.email) {
-          message = success ? `邮件已发送至 ${guest.email}` : '邮件发送失败，请稍后重试';
+        if (!guest.phone) {
+          success = false;
+          message = '未提供手机号码';
         } else {
+          success = Math.random() > 0.08;
+          message = success ? `已发送至 ${guest.phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')}` : '短信发送失败，请检查号码';
+        }
+      } else if (channel === 'email') {
+        if (!guest.email) {
+          success = false;
           message = '未提供邮箱地址';
+        } else {
+          success = Math.random() > 0.08;
+          message = success ? `邮件已发送至 ${guest.email}` : '邮件发送失败，请稍后重试';
         }
       } else {
+        success = Math.random() > 0.02;
         message = success ? '链接已生成' : '链接生成失败';
       }
 

@@ -327,7 +327,19 @@ export default function Seating() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-800 truncate">{guest.name}</p>
-                  <p className="text-xs text-champagne-500">{guest.group || (guest.relation === 'groom_side' ? '新郎方' : '新娘方')}</p>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn(
+                      'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium',
+                      guest.relation === 'groom_side'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-pink-100 text-pink-700'
+                    )}>
+                      {guest.relation === 'groom_side' ? '新郎方' : '新娘方'}
+                    </span>
+                    {guest.group && (
+                      <span className="text-xs text-champagne-500">· {guest.group}</span>
+                    )}
+                  </div>
                 </div>
                 {guest.plusOne && (
                   <span className="badge bg-champagne-100 text-champagne-700 text-[10px]">+1</span>
