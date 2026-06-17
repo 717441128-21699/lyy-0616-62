@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useWeddingStore } from '@/store/weddingStore';
 import { PageKey } from '@/types';
 import Sidebar from '@/components/layout/Sidebar';
@@ -11,6 +12,8 @@ import Seating from '@/pages/Seating';
 import Budget from '@/pages/Budget';
 import CheckIn from '@/pages/CheckIn';
 import Album from '@/pages/Album';
+import RSVP from '@/pages/RSVP';
+import GuestCheckIn from '@/pages/GuestCheckIn';
 
 const pageTitles: Record<PageKey, { title: string; subtitle: string }> = {
   dashboard: { title: '首页仪表盘', subtitle: '婚礼筹备总览 · 一切尽在掌握' },
@@ -28,6 +31,45 @@ export default function App() {
   const project = useWeddingStore((s) => s.project);
   const currentPage = useWeddingStore((s) => s.currentPage) as PageKey;
   const setCurrentPage = useWeddingStore((s) => s.setCurrentPage);
+
+  const [externalRoute, setExternalRoute] = useState<{ type: 'rsvp' | 'checkin'; guestId: string } | null>(null);
+
+  useEffect(() => {
+    const parseRoute = () => {
+      const path = window.location.pathname;
+      const rsvpMatch = path.match(/^\/rsvp\/(.+)$/);
+      const checkinMatch = path.match(/^\/checkin-scan\/(.+)$/);
+
+      if (rsvpMatch) {
+        setExternalRoute({ type: 'rsvp', guestId: rsvpMatch[1] });
+      } else if (checkinMatch) {
+        setExternalRoute({ type: 'checkin', guestId: checkinMatch[1] });
+      } else {
+        setExternalRoute(null);
+      }
+    };
+
+    parseRoute();
+
+    const handlePopState = () => parseRoute();
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleBackToDashboard = () => {
+    window.history.pushState({}, '', '/');
+    setExternalRoute(null);
+    setCurrentPage('dashboard');
+  };
+
+  if (externalRoute) {
+    if (externalRoute.type === 'rsvp') {
+      return <RSVP guestId={externalRoute.guestId} onBack={handleBackToDashboard} />;
+    }
+    if (externalRoute.type === 'checkin') {
+      return <GuestCheckIn guestId={externalRoute.guestId} onBack={handleBackToDashboard} />;
+    }
+  }
 
   const renderPage = () => {
     switch (currentPage) {

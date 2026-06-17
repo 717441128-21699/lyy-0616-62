@@ -55,12 +55,26 @@ export default function Seating() {
     if (!draggedGuest) return;
     const table = tables.find((t) => t.id === tableId);
     if (!table) return;
-    const seatedCount = guests.filter((g) => g.tableId === tableId).length;
-    const nextSeat = seatedCount + 1;
+
+    const seatedGuests = guests.filter((g) => g.tableId === tableId);
+    const seatedCount = seatedGuests.length;
+
+    if (seatedCount >= table.capacity) {
+      alert('该桌已坐满！');
+      return;
+    }
+
+    const usedSeatNumbers = new Set(seatedGuests.map((g) => g.seatNumber).filter((n): n is number => n !== undefined));
+    let nextSeat = 1;
+    while (usedSeatNumbers.has(nextSeat) && nextSeat <= table.capacity) {
+      nextSeat++;
+    }
+
     if (nextSeat > table.capacity) {
       alert('该桌已坐满！');
       return;
     }
+
     assignGuestSeat(draggedGuest.id, tableId, nextSeat);
     setDraggedGuest(null);
   };
@@ -76,13 +90,17 @@ export default function Seating() {
     const filled = seated.length;
     const total = table.capacity;
 
+    const seats: Array<{ seatNumber: number; guest: Guest | null }> = [];
+    for (let i = 1; i <= total; i++) {
+      const guest = seated.find((g) => g.seatNumber === i) || null;
+      seats.push({ seatNumber: i, guest });
+    }
+
     return (
       <div className="mt-4 grid grid-cols-5 gap-2">
-        {Array.from({ length: total }).map((_, idx) => {
-          const guest = seated[idx];
-          const seatNum = idx + 1;
+        {seats.map(({ seatNumber, guest }) => {
           return (
-            <div key={idx} className="relative group">
+            <div key={seatNumber} className="relative group">
               {guest ? (
                 <div
                   className="flex flex-col items-center cursor-move transition-transform hover:scale-110"
@@ -91,10 +109,13 @@ export default function Seating() {
                   onDragEnd={() => setDraggedGuest(null)}
                 >
                   <div className={cn(
-                    'w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold shadow-md border-2 border-white',
+                    'w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold shadow-md border-2 border-white relative',
                     guest.relation === 'groom_side' ? 'bg-gradient-to-br from-blue-400 to-blue-600' : 'bg-gradient-to-br from-pink-400 to-rose-500'
                   )}>
                     {getInitials(guest.name)}
+                    <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-champagne-400 text-white text-[10px] flex items-center justify-center font-bold">
+                      {seatNumber}
+                    </span>
                   </div>
                   <p className="text-[10px] text-gray-600 mt-1 truncate w-full text-center">
                     {guest.name.slice(0, 4)}
@@ -108,8 +129,8 @@ export default function Seating() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center opacity-40">
-                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-champagne-300 flex items-center justify-center text-champagne-300 text-[10px]">
-                    {seatNum}
+                  <div className="w-10 h-10 rounded-full border-2 border-dashed border-champagne-300 flex items-center justify-center text-champagne-300 text-[10px] font-bold">
+                    {seatNumber}
                   </div>
                   <p className="text-[10px] text-champagne-300 mt-1">空位</p>
                 </div>
@@ -306,7 +327,7 @@ export default function Seating() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-800 truncate">{guest.name}</p>
-                  <p className="text-xs text-champagne-500">{guest.group || guest.relation === 'groom_side' ? '新郎方' : '新娘方'}</p>
+                  <p className="text-xs text-champagne-500">{guest.group || (guest.relation === 'groom_side' ? '新郎方' : '新娘方')}</p>
                 </div>
                 {guest.plusOne && (
                   <span className="badge bg-champagne-100 text-champagne-700 text-[10px]">+1</span>
